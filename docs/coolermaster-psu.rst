@@ -7,6 +7,12 @@ Supported devices:
 
 * Cooler Master Power Supplies
 
+  Cooler Master X Silent Edge Platinum 850W
+
+  Cooler Master X Silent MAX Platinum 1100W
+
+  Cooler Master X Silent MAX Platinum 1300W
+
   Cooler Master X Mighty Platinum 2000
 
 Author: Michael Straßburger
@@ -14,8 +20,8 @@ Author: Michael Straßburger
 Description
 -----------
 
-This driver implements the sysfs interface for the Cooler Master X Mighty
-Platinum 2000 power supply with a USB HID protocol interface.
+This driver implements the sysfs interface for the Cooler Master X Silent /
+X Mighty USB HID power supply family.
 
 The device exposes one HID interface with device information, two temperature
 channels, AC input telemetry and three DC output rails (12V, 3.3V, 5V). The

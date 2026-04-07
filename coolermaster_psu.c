@@ -32,28 +32,31 @@
 #include <linux/unaligned.h>
 
 #define DRIVER_NAME			"coolermaster-psu"
-#define XMIGHTY_VID			0x2516
-#define XMIGHTY_PID			0x020e
+#define COOLERMASTER_PSU_VID				0x2516
+#define COOLERMASTER_PSU_PID_X_SILENT_EDGE_850W		0x01a3
+#define COOLERMASTER_PSU_PID_X_SILENT_MAX_1300W		0x01a5
+#define COOLERMASTER_PSU_PID_X_SILENT_MAX_1100W		0x020c
+#define COOLERMASTER_PSU_PID_X_MIGHTY_2000W		0x020e
 
-#define XMIGHTY_REPORT_INFO		0x01
-#define XMIGHTY_REPORT_CMD		0x02
-#define XMIGHTY_REPORT_POWER		0x03
-#define XMIGHTY_REPORT_HOTSPOT		0x04
-#define XMIGHTY_REPORT_AMBIENT		0x05
+#define COOLERMASTER_PSU_REPORT_INFO		0x01
+#define COOLERMASTER_PSU_REPORT_CMD		0x02
+#define COOLERMASTER_PSU_REPORT_POWER		0x03
+#define COOLERMASTER_PSU_REPORT_HOTSPOT		0x04
+#define COOLERMASTER_PSU_REPORT_AMBIENT		0x05
 
-#define XMIGHTY_CMD_KEEPALIVE		0x03
-#define XMIGHTY_CMD_ENABLE_SENSORS	0x04
-#define XMIGHTY_CMD_DISABLE_SENSORS	0x05
+#define COOLERMASTER_PSU_CMD_KEEPALIVE		0x03
+#define COOLERMASTER_PSU_CMD_ENABLE_SENSORS	0x04
+#define COOLERMASTER_PSU_CMD_DISABLE_SENSORS	0x05
 
-#define XMIGHTY_INFO_LEN		7
-#define XMIGHTY_POWER_LEN		23
-#define XMIGHTY_TEMP_LEN		2
-#define XMIGHTY_KEEPALIVE_RETRIES	8
-#define XMIGHTY_ENABLE_SETTLE_MS	150
-#define XMIGHTY_POLL_SETTLE_MS		50
-#define XMIGHTY_UPDATE_INTERVAL_MS	500
+#define COOLERMASTER_PSU_INFO_LEN		7
+#define COOLERMASTER_PSU_POWER_LEN		23
+#define COOLERMASTER_PSU_TEMP_LEN		2
+#define COOLERMASTER_PSU_KEEPALIVE_RETRIES	8
+#define COOLERMASTER_PSU_ENABLE_SETTLE_MS	150
+#define COOLERMASTER_PSU_POLL_SETTLE_MS		50
+#define COOLERMASTER_PSU_UPDATE_INTERVAL_MS	500
 
-struct xmighty_data {
+struct coolermaster_psu_data {
 	struct hid_device *hdev;
 	struct device *hwmon_dev;
 	struct mutex lock;
@@ -61,10 +64,10 @@ struct xmighty_data {
 	bool valid;
 	bool enabled;
 
-	u8 report1[XMIGHTY_INFO_LEN];
-	u8 report3[XMIGHTY_POWER_LEN];
-	u8 report4[XMIGHTY_TEMP_LEN];
-	u8 report5[XMIGHTY_TEMP_LEN];
+	u8 report1[COOLERMASTER_PSU_INFO_LEN];
+	u8 report3[COOLERMASTER_PSU_POWER_LEN];
+	u8 report4[COOLERMASTER_PSU_TEMP_LEN];
+	u8 report5[COOLERMASTER_PSU_TEMP_LEN];
 
 	long temp_ambient_mc;
 	long temp_hotspot_mc;
@@ -86,7 +89,8 @@ struct xmighty_data {
 	long power_5v_uw;
 };
 
-static int xmighty_get_report(struct xmighty_data *data, u8 report_id, u8 *buf, size_t len)
+static int coolermaster_psu_get_report(struct coolermaster_psu_data *data,
+				       u8 report_id, u8 *buf, size_t len)
 {
 	int ret;
 
@@ -103,12 +107,13 @@ static int xmighty_get_report(struct xmighty_data *data, u8 report_id, u8 *buf, 
 	return 0;
 }
 
-static int xmighty_set_cmd(struct xmighty_data *data, u8 cmd)
+static int coolermaster_psu_set_cmd(struct coolermaster_psu_data *data, u8 cmd)
 {
-	u8 buf[2] = { XMIGHTY_REPORT_CMD, cmd };
+	u8 buf[2] = { COOLERMASTER_PSU_REPORT_CMD, cmd };
 	int ret;
 
-	ret = hid_hw_raw_request(data->hdev, XMIGHTY_REPORT_CMD, buf, sizeof(buf),
+	ret = hid_hw_raw_request(data->hdev, COOLERMASTER_PSU_REPORT_CMD,
+				 buf, sizeof(buf),
 				 HID_OUTPUT_REPORT, HID_REQ_SET_REPORT);
 	if (ret < 0)
 		return ret;
@@ -118,7 +123,7 @@ static int xmighty_set_cmd(struct xmighty_data *data, u8 cmd)
 	return 0;
 }
 
-static void xmighty_parse_cache(struct xmighty_data *data)
+static void coolermaster_psu_parse_cache(struct coolermaster_psu_data *data)
 {
 	const u8 *r3 = data->report3;
 
@@ -144,30 +149,36 @@ static void xmighty_parse_cache(struct xmighty_data *data)
 	data->temp_ambient_mc = data->report5[1] * 1000L;
 }
 
-static int xmighty_try_refresh_locked(struct xmighty_data *data, bool force_enable)
+static int coolermaster_psu_try_refresh_locked(struct coolermaster_psu_data *data,
+					       bool force_enable)
 {
 	int ret, i;
 
-	ret = xmighty_get_report(data, XMIGHTY_REPORT_INFO, data->report1, sizeof(data->report1));
+	ret = coolermaster_psu_get_report(data, COOLERMASTER_PSU_REPORT_INFO,
+					  data->report1, sizeof(data->report1));
 	if (ret)
 		return ret;
 
 	if (!data->enabled || force_enable) {
-		ret = xmighty_set_cmd(data, XMIGHTY_CMD_ENABLE_SENSORS);
+		ret = coolermaster_psu_set_cmd(data,
+					       COOLERMASTER_PSU_CMD_ENABLE_SENSORS);
 		if (ret)
 			return ret;
 		data->enabled = true;
 	}
 
-	for (i = 0; i < XMIGHTY_KEEPALIVE_RETRIES; i++) {
-		msleep(XMIGHTY_ENABLE_SETTLE_MS);
+	for (i = 0; i < COOLERMASTER_PSU_KEEPALIVE_RETRIES; i++) {
+		msleep(COOLERMASTER_PSU_ENABLE_SETTLE_MS);
 
-		ret = xmighty_set_cmd(data, XMIGHTY_CMD_KEEPALIVE);
+		ret = coolermaster_psu_set_cmd(data,
+					       COOLERMASTER_PSU_CMD_KEEPALIVE);
 		if (ret)
 			return ret;
 
-		ret = xmighty_get_report(data, XMIGHTY_REPORT_POWER, data->report3,
-					 sizeof(data->report3));
+		ret = coolermaster_psu_get_report(data,
+						  COOLERMASTER_PSU_REPORT_POWER,
+						  data->report3,
+						  sizeof(data->report3));
 		if (ret)
 			return ret;
 
@@ -175,54 +186,59 @@ static int xmighty_try_refresh_locked(struct xmighty_data *data, bool force_enab
 			break;
 	}
 
-	if (i == XMIGHTY_KEEPALIVE_RETRIES)
+	if (i == COOLERMASTER_PSU_KEEPALIVE_RETRIES)
 		return -EIO;
 
-	msleep(XMIGHTY_POLL_SETTLE_MS);
+	msleep(COOLERMASTER_PSU_POLL_SETTLE_MS);
 
-	ret = xmighty_get_report(data, XMIGHTY_REPORT_HOTSPOT, data->report4,
-				 sizeof(data->report4));
+	ret = coolermaster_psu_get_report(data,
+					  COOLERMASTER_PSU_REPORT_HOTSPOT,
+					  data->report4,
+					  sizeof(data->report4));
 	if (ret)
 		return ret;
 
-	ret = xmighty_get_report(data, XMIGHTY_REPORT_AMBIENT, data->report5,
-				 sizeof(data->report5));
+	ret = coolermaster_psu_get_report(data,
+					  COOLERMASTER_PSU_REPORT_AMBIENT,
+					  data->report5,
+					  sizeof(data->report5));
 	if (ret)
 		return ret;
 
-	xmighty_parse_cache(data);
+	coolermaster_psu_parse_cache(data);
 	data->valid = true;
 	data->last_updated = jiffies;
 
 	return 0;
 }
 
-static int xmighty_refresh_locked(struct xmighty_data *data)
+static int coolermaster_psu_refresh_locked(struct coolermaster_psu_data *data)
 {
 	if (data->valid &&
 	    time_before(jiffies, data->last_updated +
-				    msecs_to_jiffies(XMIGHTY_UPDATE_INTERVAL_MS)))
+				    msecs_to_jiffies(COOLERMASTER_PSU_UPDATE_INTERVAL_MS)))
 		return 0;
 
-	return xmighty_try_refresh_locked(data, false) ?:
+	return coolermaster_psu_try_refresh_locked(data, false) ?:
 	       0;
 }
 
-static int xmighty_refresh(struct xmighty_data *data)
+static int coolermaster_psu_refresh(struct coolermaster_psu_data *data)
 {
 	int ret;
 
 	mutex_lock(&data->lock);
-	ret = xmighty_refresh_locked(data);
+	ret = coolermaster_psu_refresh_locked(data);
 	if (ret && data->enabled)
-		ret = xmighty_try_refresh_locked(data, true);
+		ret = coolermaster_psu_try_refresh_locked(data, true);
 	mutex_unlock(&data->lock);
 
 	return ret;
 }
 
-static umode_t xmighty_is_visible(const void *drvdata, enum hwmon_sensor_types type,
-				  u32 attr, int channel)
+static umode_t coolermaster_psu_is_visible(const void *drvdata,
+					   enum hwmon_sensor_types type,
+					   u32 attr, int channel)
 {
 	switch (type) {
 	case hwmon_temp:
@@ -252,13 +268,14 @@ static umode_t xmighty_is_visible(const void *drvdata, enum hwmon_sensor_types t
 	return 0;
 }
 
-static int xmighty_read(struct device *dev, enum hwmon_sensor_types type,
-			u32 attr, int channel, long *val)
+static int coolermaster_psu_read(struct device *dev,
+				 enum hwmon_sensor_types type,
+				 u32 attr, int channel, long *val)
 {
-	struct xmighty_data *data = dev_get_drvdata(dev);
+	struct coolermaster_psu_data *data = dev_get_drvdata(dev);
 	int ret;
 
-	ret = xmighty_refresh(data);
+	ret = coolermaster_psu_refresh(data);
 	if (ret)
 		return ret;
 
@@ -307,8 +324,10 @@ static int xmighty_read(struct device *dev, enum hwmon_sensor_types type,
 	return -EOPNOTSUPP;
 }
 
-static int xmighty_read_string(struct device *dev, enum hwmon_sensor_types type,
-			       u32 attr, int channel, const char **str)
+static int coolermaster_psu_read_string(struct device *dev,
+					enum hwmon_sensor_types type,
+					u32 attr, int channel,
+					const char **str)
 {
 	static const char * const temp_labels[] = { "ambient", "hotspot" };
 	static const char * const in_labels[] = { "ac_input", "12V", "3.3V", "5V" };
@@ -337,13 +356,13 @@ static int xmighty_read_string(struct device *dev, enum hwmon_sensor_types type,
 	return -EOPNOTSUPP;
 }
 
-static const struct hwmon_ops xmighty_hwmon_ops = {
-	.is_visible = xmighty_is_visible,
-	.read = xmighty_read,
-	.read_string = xmighty_read_string,
+static const struct hwmon_ops coolermaster_psu_hwmon_ops = {
+	.is_visible = coolermaster_psu_is_visible,
+	.read = coolermaster_psu_read,
+	.read_string = coolermaster_psu_read_string,
 };
 
-static const struct hwmon_channel_info * const xmighty_info[] = {
+static const struct hwmon_channel_info * const coolermaster_psu_info[] = {
 	HWMON_CHANNEL_INFO(temp, HWMON_T_INPUT | HWMON_T_LABEL,
 				 HWMON_T_INPUT | HWMON_T_LABEL),
 	HWMON_CHANNEL_INFO(in, HWMON_I_INPUT | HWMON_I_LABEL,
@@ -362,14 +381,15 @@ static const struct hwmon_channel_info * const xmighty_info[] = {
 	NULL,
 };
 
-static const struct hwmon_chip_info xmighty_chip_info = {
-	.ops = &xmighty_hwmon_ops,
-	.info = xmighty_info,
+static const struct hwmon_chip_info coolermaster_psu_chip_info = {
+	.ops = &coolermaster_psu_hwmon_ops,
+	.info = coolermaster_psu_info,
 };
 
-static int xmighty_probe(struct hid_device *hdev, const struct hid_device_id *id)
+static int coolermaster_psu_probe(struct hid_device *hdev,
+				  const struct hid_device_id *id)
 {
-	struct xmighty_data *data;
+	struct coolermaster_psu_data *data;
 	int ret;
 
 	data = devm_kzalloc(&hdev->dev, sizeof(*data), GFP_KERNEL);
@@ -392,14 +412,14 @@ static int xmighty_probe(struct hid_device *hdev, const struct hid_device_id *id
 	if (ret)
 		goto err_stop;
 
-	ret = xmighty_refresh(data);
+	ret = coolermaster_psu_refresh(data);
 	if (ret)
 		hid_warn(hdev, "initial refresh failed: %d\n", ret);
 
 	data->hwmon_dev = devm_hwmon_device_register_with_info(&hdev->dev,
 							       "coolermaster_psu",
 							       data,
-							       &xmighty_chip_info,
+							       &coolermaster_psu_chip_info,
 							       NULL);
 	if (IS_ERR(data->hwmon_dev)) {
 		ret = PTR_ERR(data->hwmon_dev);
@@ -416,14 +436,15 @@ err_stop:
 	return ret;
 }
 
-static void xmighty_remove(struct hid_device *hdev)
+static void coolermaster_psu_remove(struct hid_device *hdev)
 {
-	struct xmighty_data *data = hid_get_drvdata(hdev);
+	struct coolermaster_psu_data *data = hid_get_drvdata(hdev);
 
 	if (data) {
 		mutex_lock(&data->lock);
 		if (data->enabled)
-			xmighty_set_cmd(data, XMIGHTY_CMD_DISABLE_SENSORS);
+			coolermaster_psu_set_cmd(data,
+						 COOLERMASTER_PSU_CMD_DISABLE_SENSORS);
 		mutex_unlock(&data->lock);
 	}
 
@@ -431,33 +452,40 @@ static void xmighty_remove(struct hid_device *hdev)
 	hid_hw_stop(hdev);
 }
 
-static const struct hid_device_id xmighty_table[] = {
-	{ HID_USB_DEVICE(XMIGHTY_VID, XMIGHTY_PID) },
+static const struct hid_device_id coolermaster_psu_table[] = {
+	{ HID_USB_DEVICE(COOLERMASTER_PSU_VID,
+			 COOLERMASTER_PSU_PID_X_SILENT_EDGE_850W) },
+	{ HID_USB_DEVICE(COOLERMASTER_PSU_VID,
+			 COOLERMASTER_PSU_PID_X_SILENT_MAX_1300W) },
+	{ HID_USB_DEVICE(COOLERMASTER_PSU_VID,
+			 COOLERMASTER_PSU_PID_X_SILENT_MAX_1100W) },
+	{ HID_USB_DEVICE(COOLERMASTER_PSU_VID,
+			 COOLERMASTER_PSU_PID_X_MIGHTY_2000W) },
 	{ }
 };
-MODULE_DEVICE_TABLE(hid, xmighty_table);
+MODULE_DEVICE_TABLE(hid, coolermaster_psu_table);
 
-static struct hid_driver xmighty_driver = {
+static struct hid_driver coolermaster_psu_driver = {
 	.name = DRIVER_NAME,
-	.id_table = xmighty_table,
-	.probe = xmighty_probe,
-	.remove = xmighty_remove,
+	.id_table = coolermaster_psu_table,
+	.probe = coolermaster_psu_probe,
+	.remove = coolermaster_psu_remove,
 };
 
-static int __init xmighty_init(void)
+static int __init coolermaster_psu_init(void)
 {
-	return hid_register_driver(&xmighty_driver);
+	return hid_register_driver(&coolermaster_psu_driver);
 }
 
-static void __exit xmighty_exit(void)
+static void __exit coolermaster_psu_exit(void)
 {
-	hid_unregister_driver(&xmighty_driver);
+	hid_unregister_driver(&coolermaster_psu_driver);
 }
 
 /* Initialize after the HID bus when built into the kernel. */
-late_initcall(xmighty_init);
-module_exit(xmighty_exit);
+late_initcall(coolermaster_psu_init);
+module_exit(coolermaster_psu_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Michael Straßburger <codepoet@cpan.org>");
-MODULE_DESCRIPTION("Hwmon driver for Cooler Master X Mighty Platinum 2000 PSU");
+MODULE_DESCRIPTION("Hwmon driver for Cooler Master USB HID PSUs");

@@ -1,6 +1,6 @@
 # coolermaster-psu
 
-Linux HID + hwmon driver for the Cooler Master PSU series, tested on X Mighty Platinum 2000 PSU (`2516:020e`).
+Linux HID + hwmon driver for the Cooler Master USB PSU family.
 
 This repository contains:
 
@@ -15,6 +15,13 @@ Validated on:
 
 - Proxmox VE kernel `6.17.13-2-pve`
 - device: `Cooler Master Technology Inc. X Mighty Platinum 2000`
+
+Confirmed supported model family:
+
+- Cooler Master X Silent Edge Platinum 850W (`2516:01a3`)
+- Cooler Master X Silent MAX Platinum 1300W (`2516:01a5`)
+- Cooler Master X Silent MAX Platinum 1100W (`2516:020c`)
+- Cooler Master X Mighty Platinum 2000 (`2516:020e`)
 
 Recovered protocol flow:
 
@@ -68,7 +75,7 @@ make
 
 ## DKMS install
 
-Example flow on Debian / Proxmox:
+Example flow on Debian:
 
 ```sh
 apt install dkms linux-headers-$(uname -r)
