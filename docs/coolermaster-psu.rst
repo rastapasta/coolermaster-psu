@@ -15,7 +15,7 @@ Supported devices:
 
   Cooler Master X Mighty Platinum 2000
 
-Author: Michael Straßburger
+Author: Michael Straßburger <codepoet@cpan.org>
 
 Description
 -----------
@@ -24,41 +24,43 @@ This driver implements the sysfs interface for the Cooler Master X Silent /
 X Mighty USB HID power supply family.
 
 The device exposes one HID interface with device information, two temperature
-channels, AC input telemetry and three DC output rails (12V, 3.3V, 5V). The
-driver enables sensor reporting during initialization and keeps the device alive
-with a periodic software poll.
+channels, and a vendor-specific telemetry path that also appears to report AC
+input and three DC output rails (12V, 3.3V, 5V). The driver enables sensor
+reporting during initialization, consumes the live interrupt-IN telemetry path,
+and falls back to direct temperature reads only when a temperature channel is
+stale.
 
 Sysfs entries
 -------------
 
 =======================	========================================================
-curr1_input		Total AC input current
-curr2_input		Current on the 12V rail
-curr3_input		Current on the 3.3V rail
-curr4_input		Current on the 5V rail
-in0_input		AC input voltage
-in1_input		Voltage on the 12V rail
-in2_input		Voltage on the 3.3V rail
-in3_input		Voltage on the 5V rail
-power1_input		Total AC input power
-power2_input		Total DC output power
-power3_input		Power on the 12V rail
-power4_input		Power on the 3.3V rail
-power5_input		Power on the 5V rail
 temp1_input		Ambient temperature
 temp2_input		Hotspot temperature
+in0_input		AC input voltage
+in1_input		12V rail voltage
+in2_input		3.3V rail voltage
+in3_input		5V rail voltage
+curr1_input		AC input current
+curr2_input		12V rail current
+curr3_input		3.3V rail current
+curr4_input		5V rail current
+power1_input		AC input power
+power2_input		Total output power
+power3_input		12V rail power
+power4_input		3.3V rail power
+power5_input		5V rail power
 =======================	========================================================
 
-All values use standard hwmon units:
+The exported values use standard hwmon units:
 
+* temperatures in millidegree Celsius
 * voltages in millivolts
 * currents in milliamps
 * powers in microwatts
-* temperatures in millidegree Celsius
 
 Usage Notes
 -----------
 
 It is a USB HID device and is auto-detected. The driver uses standard HID
-GET_REPORT and SET_REPORT requests to retrieve telemetry and to keep reporting
-enabled.
+GET_REPORT and SET_REPORT requests to initialize telemetry, then consumes live
+interrupt-IN reports for power updates.

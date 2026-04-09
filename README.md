@@ -6,7 +6,6 @@ This repository contains:
 
 - an out-of-tree kernel module
 - DKMS packaging metadata
-- a helper script and systemd unit for binding the driver
 - an `lm-sensors` config example
 
 ## Current status
@@ -27,8 +26,9 @@ Recovered protocol flow:
 
 1. `GET_REPORT` input report `1` for device / firmware info
 2. `SET_REPORT` output report `2`, payload `[2, 4]` to enable sensor reporting
-3. `SET_REPORT` output report `2`, payload `[2, 3]` as keepalive
-4. `GET_REPORT` input reports `3`, `4`, `5` for power + temperatures
+3. interrupt-IN `report 3` for live power telemetry
+4. interrupt-IN `report 4` / `5` for live hotspot and ambient temperatures
+5. `GET_REPORT` input `4` / `5` as fallback if a temperature channel is stale
 
 Exposed telemetry:
 
@@ -38,7 +38,6 @@ Exposed telemetry:
 - 12V rail voltage / current / power
 - 3.3V rail voltage / current / power
 - 5V rail voltage / current / power
-- total output power
 
 ## hwmon units
 
@@ -46,24 +45,16 @@ Values follow standard `hwmon` units, same convention used by in-tree drivers
 such as `corsair-psu`:
 
 - `temp*_input`: millidegree Celsius
-- `in*_input`: millivolts
-- `curr*_input`: milliamps
-- `power*_input`: microwatts
 
 Examples:
 
 - `41000` = `41.000 C`
-- `12300` = `12.300 V`
-- `500` = `0.500 A`
-- `119000000` = `119.000000 W`
 
 ## Repository layout
 
 - `coolermaster_psu.c`: out-of-tree module source
 - `Makefile`: out-of-tree module build
 - `dkms.conf`: DKMS metadata
-- `bind-coolermaster-psu.sh`: helper to load and bind the driver
-- `coolermaster-psu.service`: example systemd unit
 - `sensors.d/coolermaster-psu.conf`: `lm-sensors` labels
 - `docs/coolermaster-psu.rst`: latest upstream-targeted hwmon documentation text
 
@@ -86,11 +77,14 @@ dkms install -m coolermaster-psu -v 0.1.0
 modprobe coolermaster_psu
 ```
 
+Once installed, the module can bind like any other HID driver through its
+modalias. No helper script, `systemd` unit, or `/etc/modules-load.d/` entry is
+required.
+
 ## Secure Boot
 
 If Secure Boot is enabled, sign the module with an enrolled key or use DKMS'
-MOK workflow. On the test host, the DKMS-generated MOK key had to be enrolled
-before the module could load.
+MOK workflow. On
 
 ## Bind / unbind
 
@@ -108,12 +102,6 @@ Unload and restore generic HID:
 echo 0003:2516:020E.000X > /sys/bus/hid/drivers/coolermaster_psu/unbind
 modprobe -r coolermaster_psu
 echo 0003:2516:020E.000X > /sys/bus/hid/drivers/hid-generic/bind
-```
-
-Use the helper script if you want this automated:
-
-```sh
-sh ./bind-coolermaster-psu.sh
 ```
 
 ## lm-sensors example
